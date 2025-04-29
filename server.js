@@ -21,6 +21,7 @@ app.use(express.json());
 
 const userRoutes = require('./routes/users');
 
+app.use('/auth', userRoutes);
 
 
 app.listen(3000, () => console.log('Server running on port 3000'));
