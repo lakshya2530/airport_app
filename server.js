@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors'); // Import cors package
 const { Server } = require('socket.io');
 const http = require('http');
+const path = require('path');
 
 const app = express();
 require('dotenv').config();
@@ -20,9 +21,12 @@ app.use(express.json());
 // Routes
 
 const userRoutes = require('./routes/users');
+const postRoutes = require('./routes/post');
 
 app.use('/auth', userRoutes);
+app.use("/posts", postRoutes);                
 
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.listen(3000, () => console.log('Server running on port 3000'));
 
