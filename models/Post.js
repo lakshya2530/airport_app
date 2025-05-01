@@ -23,6 +23,7 @@ module.exports = (sequelize, DataTypes) => {
       timestamps: true, // ensures createdAt/updatedAt are tracked
     });
   
+
     return Post;
   };
   

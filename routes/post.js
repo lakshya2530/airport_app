@@ -2,32 +2,44 @@ const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 const fs = require("fs");
-const { Post } = require("../models");
+const { User, Post, PostLike, PostComment, PostSave } = require("../models"); // Import models
 const authenticateToken = require('../middleware/auth');
 const { sequelize } = require("../models");
 
 // Get all posts
-router.get("/list", async (req, res) => {
-    try {
-      const [results] = await sequelize.query(`
-        SELECT 
-          posts.id, 
-          posts.description, 
-          posts.images, 
-          posts.user_id,
-          users.name as user_name,
-          users.profile_image as user_image
-        FROM posts
-        JOIN users ON users.id = posts.user_id
-        ORDER BY posts.id DESC
-      `);
+// router.get("/list", async (req, res) => {
+//     try {
+//       // Get posts along with like count, comment count, and save count
+//       const query = `
+//         SELECT 
+//           posts.id, 
+//           posts.description, 
+//           posts.images, 
+//           posts.user_id,
+//           users.name AS user_name,
+//           users.profile_image AS user_image,
+//           COALESCE(COUNT(DISTINCT post_likes.id), 0) AS like_count,
+//           COALESCE(COUNT(DISTINCT post_comments.id), 0) AS comment_count,
+//           COALESCE(COUNT(DISTINCT post_saves.id), 0) AS save_count
+//         FROM posts
+//         LEFT JOIN users ON users.id = posts.user_id
+//         LEFT JOIN post_likes ON post_likes.post_id = posts.id
+//         LEFT JOIN post_comments ON post_comments.post_id = posts.id
+//         LEFT JOIN post_saves ON post_saves.post_id = posts.id
+//         GROUP BY posts.id, users.id
+//         ORDER BY posts.id DESC;
+//       `;
   
-      res.json(results);
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: err.message });
-    }
-  });
+//       const results = await sequelize.query(query, { type: sequelize.QueryTypes.SELECT });
+      
+//       res.json(results);
+//     } catch (err) {
+//       console.error(err);
+//       res.status(500).json({ error: err.message });
+//     }
+//   });
+  
+  
 // Set up Multer storage
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -79,4 +91,150 @@ router.post("/create", authenticateToken, upload, async (req, res) => {
       res.status(500).json({ error: err.message });
     }
   });
+
+
+  router.get('/list', async (req, res) => {
+    try {
+      const posts = await sequelize.query(`
+        SELECT 
+          p.id AS post_id, 
+          p.description, 
+          p.images, 
+          p.user_id,
+          u.name AS user_name,
+          u.profile_image AS user_image,
+          COUNT(pl.id) AS likeCount,
+          COUNT(pc.id) AS commentCount,
+          COUNT(ps.id) AS saveCount
+        FROM posts p
+        LEFT JOIN users u ON u.id = p.user_id
+        LEFT JOIN post_likes pl ON pl.post_id = p.id
+        LEFT JOIN post_comments pc ON pc.post_id = p.id
+        LEFT JOIN post_saves ps ON ps.post_id = p.id
+        GROUP BY p.id, u.id
+        ORDER BY p.id DESC
+      `, { type: sequelize.QueryTypes.SELECT });
+  
+      res.json(posts);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+  
+  // POST like on a post
+  router.post('/like', async (req, res) => {
+    try {
+      const { user_id, post_id } = req.body;
+  
+      const likeExists = await PostLike.findOne({ where: { user_id, post_id } });
+  
+      if (likeExists) {
+        // Unlike if already liked
+        await PostLike.destroy({ where: { user_id, post_id } });
+        return res.json({ message: 'Post unliked' });
+      }
+  
+      // Like the post
+      await PostLike.create({ user_id, post_id });
+      res.json({ message: 'Post liked' });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+  
+  // POST comment on a post
+  router.post('/comment', async (req, res) => {
+    try {
+      const { user_id, post_id, comment } = req.body;
+  
+      await PostComment.create({ user_id, post_id, comment });
+      res.json({ message: 'Comment added' });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+  
+  // POST save a post
+  router.post('/save', async (req, res) => {
+    try {
+      const { user_id, post_id } = req.body;
+  
+      const saveExists = await PostSave.findOne({ where: { user_id, post_id } });
+  
+      if (saveExists) {
+        // Remove save if already saved
+        await PostSave.destroy({ where: { user_id, post_id } });
+        return res.json({ message: 'Post unsaved' });
+      }
+  
+      // Save the post
+      await PostSave.create({ user_id, post_id });
+      res.json({ message: 'Post saved' });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  
+  router.get('/:postId/comments', async (req, res) => {
+    const postId = req.params.postId;
+  
+    try {
+      const [comments] = await sequelize.query(`
+        SELECT 
+          pc.id,
+          pc.post_id,
+          pc.user_id,
+          pc.comment,
+          pc.created_at,
+          u.name AS user_name,
+          u.profile_image AS user_image
+        FROM post_comments pc
+        LEFT JOIN users u ON u.id = pc.user_id
+        WHERE pc.post_id = :postId
+        ORDER BY pc.id DESC
+      `, {
+        replacements: { postId },
+      });
+  
+      res.json(comments);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch comments' });
+    }
+  });
+
+  router.get('/:userId/saved-posts', async (req, res) => {
+    const userId = req.params.userId;
+  
+    try {
+      const [savedPosts] = await sequelize.query(`
+        SELECT 
+          ps.post_id,
+          p.description,
+          p.images,
+          ps.created_at AS saved_at,
+          u.name AS post_user_name,
+          u.profile_image AS post_user_image
+        FROM post_saves ps
+        LEFT JOIN posts p ON p.id = ps.post_id
+        LEFT JOIN users u ON u.id = p.user_id
+        WHERE ps.user_id = :userId
+        ORDER BY ps.id DESC
+      `, {
+        replacements: { userId },
+      });
+  
+      res.json(savedPosts);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to fetch saved posts' });
+    }
+  });
+  
+
+  
 module.exports = router;
