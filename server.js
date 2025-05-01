@@ -22,9 +22,11 @@ app.use(express.json());
 
 const userRoutes = require('./routes/users');
 const postRoutes = require('./routes/post');
+const messageRoutes = require('./routes/message');
 
 app.use('/auth', userRoutes);
 app.use("/posts", postRoutes);                
+app.use("/message", messageRoutes);                
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
