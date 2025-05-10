@@ -5,6 +5,7 @@ const fs = require("fs");
 const { User, Post, PostLike, PostComment, PostSave } = require("../models"); // Import models
 const authenticateToken = require('../middleware/auth');
 const { sequelize } = require("../models");
+const jwt = require("jsonwebtoken");
 
 // Get all posts
 // router.get("/list", async (req, res) => {
@@ -93,34 +94,88 @@ router.post("/create", authenticateToken, upload, async (req, res) => {
   });
 
 
-  router.get('/list', async (req, res) => {
+router.get('/list', async (req, res) => {
+  let userId = 0; // Default for guest users
+
+  // Get token from header
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  // Try to decode token (if present)
+  if (token) {
     try {
-      const posts = await sequelize.query(`
-        SELECT 
-          p.id AS post_id, 
-          p.description, 
-          p.images, 
-          p.user_id,
-          u.name AS user_name,
-          u.profile_image AS user_image,
-          COUNT(pl.id) AS likeCount,
-          COUNT(pc.id) AS commentCount,
-          COUNT(ps.id) AS saveCount
-        FROM posts p
-        LEFT JOIN users u ON u.id = p.user_id
-        LEFT JOIN post_likes pl ON pl.post_id = p.id
-        LEFT JOIN post_comments pc ON pc.post_id = p.id
-        LEFT JOIN post_saves ps ON ps.post_id = p.id
-        GROUP BY p.id, u.id
-        ORDER BY p.id DESC
-      `, { type: sequelize.QueryTypes.SELECT });
-  
-      res.json(posts);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      userId = decoded.id;
     } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: err.message });
+      console.warn("Invalid token:", err.message);
     }
-  });
+  }
+
+  try {
+    const posts = await sequelize.query(`
+      SELECT 
+        p.id AS post_id, 
+        p.description, 
+        p.images, 
+        p.user_id,
+        u.name AS user_name,
+        u.profile_image AS user_image,
+        EXISTS (
+          SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = :userId
+        ) AS is_like,
+        EXISTS (
+          SELECT 1 FROM post_saves ps WHERE ps.post_id = p.id AND ps.user_id = :userId
+        ) AS is_save,
+        (SELECT COUNT(*) FROM post_likes WHERE post_id = p.id) AS likeCount,
+        (SELECT COUNT(*) FROM post_comments WHERE post_id = p.id) AS commentCount,
+        (SELECT COUNT(*) FROM post_saves WHERE post_id = p.id) AS saveCount
+      FROM posts p
+      LEFT JOIN users u ON u.id = p.user_id
+      ORDER BY p.id DESC
+    `, {
+      replacements: { userId },
+      type: sequelize.QueryTypes.SELECT
+    });
+
+    res.json(posts);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+  
+
+  // router.get('/list', async (req, res) => {
+  //   try {
+  //     const posts = await sequelize.query(`
+  //       SELECT 
+  //         p.id AS post_id, 
+  //         p.description, 
+  //         p.images, 
+  //         p.user_id,
+  //         u.name AS user_name,
+  //         u.profile_image AS user_image,
+  //         COUNT(pl.id) AS likeCount,
+  //         COUNT(pc.id) AS commentCount,
+  //         COUNT(ps.id) AS saveCount
+
+          
+  //       FROM posts p
+  //       LEFT JOIN users u ON u.id = p.user_id
+  //       LEFT JOIN post_likes pl ON pl.post_id = p.id
+  //       LEFT JOIN post_comments pc ON pc.post_id = p.id
+  //       LEFT JOIN post_saves ps ON ps.post_id = p.id
+  //       GROUP BY p.id, u.id
+  //       ORDER BY p.id DESC
+  //     `, { type: sequelize.QueryTypes.SELECT });
+  
+  //     res.json(posts);
+  //   } catch (err) {
+  //     console.error(err);
+  //     res.status(500).json({ error: err.message });
+  //   }
+  // });
   
   // POST like on a post
   router.post('/like', async (req, res) => {
