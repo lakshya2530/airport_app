@@ -23,13 +23,14 @@ app.use(express.json());
 const userRoutes = require('./routes/users');
 const postRoutes = require('./routes/post');
 const messageRoutes = require('./routes/message');
+const eventRoutes = require('./routes/events');
 
 app.use('/auth', userRoutes);
 app.use("/posts", postRoutes);                
 app.use("/message", messageRoutes);                
+app.use("/events", eventRoutes);                
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.listen(3000, () => console.log('Server running on port 3000'));
-
 

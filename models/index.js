@@ -29,5 +29,7 @@ db.PostLike = require('./PostLike')(sequelize, DataTypes);
 db.PostComment = require('./PostComment')(sequelize, DataTypes);
 db.PostSave = require('./PostSave')(sequelize, DataTypes);
 db.Message = require('./message')(sequelize, DataTypes);
+db.Event = require('./Event')(sequelize, DataTypes);
+db.Enrollement = require('./Enrollment')(sequelize, DataTypes);
 
 module.exports = db;

@@ -43,9 +43,13 @@ router.post("/register", async (req, res) => {
       expiresIn: "7d",
     });
 
-    res
-      .status(201)
-      .json({ user: { id: newUser.id, email: newUser.email }, token });
+    const user = newUser.toJSON();
+    delete user.password;
+
+    res.status(201).json({
+      user,
+      token,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -75,17 +79,22 @@ router.post("/login", async (req, res) => {
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
       expiresIn: "7d",
     });
-
-    res.status(200).json({
-      user: {
-        id: user.id,
-        email: user.email,
-        latitude: user.latitude,
-        longitude: user.longitude,
-        is_available: user.is_available,
-      },
+    const users = user.toJSON();
+    delete user.password;
+    res.status(201).json({
+      users,
       token,
     });
+    // res.status(200).json({
+    //   user: {
+    //     id: user.id,
+    //     email: user.email,
+    //     latitude: user.latitude,
+    //     longitude: user.longitude,
+    //     is_available: user.is_available,
+    //   },
+    //   token,
+    // });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -133,7 +142,7 @@ router.get("/nearby-users", authenticateToken, async (req, res) => {
     const users = await sequelize.query(
       `
       SELECT * FROM (
-        SELECT id, email, latitude, longitude, is_available,
+        SELECT *,
         (6371 * acos(
             cos(radians(:latitude)) * cos(radians(latitude)) *
             cos(radians(longitude) - radians(:longitude)) +
