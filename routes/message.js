@@ -18,23 +18,60 @@ router.post('/send', authenticateToken, async (req, res) => {
 });
 
 // Get chat list (latest message per user)
+// router.get('/chat-list', authenticateToken, async (req, res) => {
+//   const userId = req.user.id;
+
+//   try {
+//     const [chatList] = await Message.sequelize.query(`
+//       SELECT DISTINCT ON (LEAST(sender_id, receiver_id), GREATEST(sender_id, receiver_id))
+//         id, sender_id, receiver_id, message, "createdAt"
+//       FROM messages
+//       WHERE sender_id = ${userId} OR receiver_id = ${userId}
+//       ORDER BY LEAST(sender_id, receiver_id), GREATEST(sender_id, receiver_id), "createdAt" DESC
+//     `);
+
+//     res.json({ success: true, data: chatList });
+//   } catch (err) {
+//     res.status(500).json({ success: false, error: err.message });
+//   }
+// });
+
 router.get('/chat-list', authenticateToken, async (req, res) => {
   const userId = req.user.id;
 
   try {
     const [chatList] = await Message.sequelize.query(`
-      SELECT DISTINCT ON (LEAST(sender_id, receiver_id), GREATEST(sender_id, receiver_id))
-        id, sender_id, receiver_id, message, "createdAt"
-      FROM messages
-      WHERE sender_id = ${userId} OR receiver_id = ${userId}
-      ORDER BY LEAST(sender_id, receiver_id), GREATEST(sender_id, receiver_id), "createdAt" DESC
-    `);
+      SELECT
+        m.id,
+        m.message,
+        m."createdAt",
+        u.id AS user_id,
+        u.name AS name,
+        u.profile_image AS user_image
+      FROM (
+        SELECT DISTINCT ON (LEAST(sender_id, receiver_id), GREATEST(sender_id, receiver_id))
+          *
+        FROM messages
+        WHERE sender_id = :userId OR receiver_id = :userId
+        ORDER BY LEAST(sender_id, receiver_id), GREATEST(sender_id, receiver_id), "createdAt" DESC
+      ) m
+      JOIN users u ON u.id = CASE
+        WHEN m.sender_id = :userId THEN m.receiver_id
+        ELSE m.sender_id
+      END
+      ORDER BY m."createdAt" DESC;
+    `, {
+      replacements: { userId },
+      type: Message.sequelize.QueryTypes.SELECT
+    });
 
     res.json({ success: true, data: chatList });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
 
 // Get chat detail between two users
 router.get('/chat-detail/:userId', authenticateToken, async (req, res) => {

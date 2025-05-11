@@ -62,7 +62,7 @@ router.post("/create", authenticateToken, upload, async (req, res) => {
       const { description } = req.body; // Get description from body
   
       // If no images are uploaded
-      let imagePaths = [];
+       let imagePaths = [];
       if (req.files && req.files.length > 0) {
         imagePaths = req.files.map(file => `/uploads/posts/${file.filename}`);
       }
